@@ -1,11 +1,11 @@
 from socket import *
 from utils.FileManager import FileManager
-import json
-import time
+import random
 
 serverPort = 1057
 clientPort = 1058
 buffer_size = 1024
+fragment_size = 200
 host = 'localhost'
 
 serverAddress = (host, serverPort)
@@ -15,9 +15,7 @@ clientSocket = socket(AF_INET, SOCK_DGRAM)
 clientSocket.bind(clientAddress)
 
 print('The client is ready.')
-
-# Dicionário para armazenar mensagens fragmentadas
-messages = {}
+session_id = 0
 
 while True:
     action = input('Enter action (get/post/close): ').strip().lower()
@@ -25,42 +23,51 @@ while True:
     if action == 'close':
         clientSocket.sendto('close'.encode(), serverAddress)
         break
-    
+
     fileName = input('Enter file name (with extension): ').strip()
+    #sessões diferentes
+    session_id = session_id + 1
+    clientSocket.sendto(action.encode(), serverAddress)
+    clientSocket.sendto(fileName.encode(), serverAddress)
 
     # Act depends on the action
     
     # Post file to server
     if action == 'post':
+        #em tese esse content vai estar em bytes
         content = FileManager.actFile(fileName, 'get')
-        fragment_size = 200
-        fragments = content[i:i+fragment_size] for i in range(0,len(content), fragment_size)
-
-        session_id = "1234" #dps arrumar pra gerar aleatório cada seção
-
-        for i, fragment in enumerate(fragments):
-            packet = {
-                "session_id": session_id.
-                "packet_id": i,
-                "content": fragment,
-                "end": False 
-            }
-            client_socket.sendto(json.dumps(packet).encode("utf-8"), (SERVER_HOST, SERVER_PORT))
-            print(f"Enviado fragmento {i}")
-
-            time.sleep(0.1)  # Pequeno atraso para evitar congestionamento
-        end_packet = {
-            "session_id": session_id.
-            "packet_id": len(fragments),
-            "content": "",
-            "end": True 
-        }
-        client_socket.sendto(json.dumps(end_packet).encode("utf-8"), (SERVER_HOST, SERVER_PORT))
-        print("Todos os fragmentos foram enviados!")
         
+        #envia o tamanho do arquivo para o servidor
+        fileSize = len(content)
+        clientSocket.sendto(fileSize, serverAddress)
+
+        #quantidade de fragmentos necessários e id da sessão
+        fragments_amount = fileSize / fragment_size + 1
+        session_id = session_id + 1
+
+        fragment = [content[i:i+fragment_size] for i in range(0,len(content), fragment_size)]
+
+        #separa os pacotes e marca o último pacote!
+        for i in range(fragments_amount):
+            flag = False
+            if i == fragments_amount: 
+                flag = True
+            packet = {
+                "session_id": session_id,
+                "packet_id": i,
+                "content": fragment[i],
+                "end": flag
+            }
+        #                   ...                 #
+        #               PAREI POR AQUI           #
+        #                   ...                 #
         # Sends file to the server
-        message = f'{action} {fileName} {fileSize}'
-        clientSocket.sendto(message.encode(), serverAddress)
+#-------acho que nao precisa enviar action e filename ja q ja mandou antes---------$
+#       action = f'{action}'
+#       fileName = f'{fileName}'
+        #content = f'{content}'
+        #clientSocket.sendto(content.encode(), serverAddress)
+
 
     # Get file from server
     elif action == 'get':
